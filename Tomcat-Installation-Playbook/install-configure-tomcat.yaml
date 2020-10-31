@@ -1,0 +1,52 @@
+---
+  - name: Install and configure Tomcat
+    hosts:  web_server
+    become: yes
+    vars:
+      required_java_version: jre-1.8.0-openjdk
+      set_java_version: jre-1.8.0-openjdk
+      required_tomcat_version: 9.0.39
+      tomcat_url: https://downloads.apache.org/tomcat/tomcat-{{required_tomcat_version.split(".")[0]}}/v{{required_tomcat_version}}/bin/apache-tomcat-{{required_tomcat_version}}.tar.gz
+      tomcat_port: 8090 #the connector port will be replaced with the port that will be specified over here using jinja2 template
+    tasks:
+      - name: Updating all the repositories in the target server.
+        yum:
+          name: "*"
+          state:  latest
+
+      - name: Installing required Java
+        yum:
+          name: "{{required_java_version}}"
+          state: present
+
+      - name: Setting the default java 1.8 version
+        alternatives:
+          name: java
+          link: /usr/bin/java
+          path: /usr/lib/jvm/{{set_java_version}}/bin/java
+
+      - name: Print the url from where the tomcat will be downloaded
+        debug: var=tomcat_url
+
+      - name: Downloading the Tomcat Version that you have sepecified.
+        get_url:
+          url: "{{tomcat_url}}"
+          dest: /usr/local
+
+      - name: Extracting the downloaded tomcat.
+        unarchive:
+          src: "/usr/local/apache-tomcat-{{required_tomcat_version}}.tar.gz"
+          dest: /usr/local
+          remote_src: yes
+
+      - name: Replacing the default port with the specified port
+        template:
+          src: ./server.xml.j2 #Replacing the connector_port value to the one given above using jinja2 template. Since it was in current working directory so used ./ otherwise specify complete path
+          dest: /usr/local/latest/conf/server.xml
+
+      - name: Renaming tomcat home
+        command: mv /usr/local/apache-tomcat-{{required_tomcat_version}} /usr/local/latest
+        ignore_errors:  True
+
+      - name: Starting tomcat
+        shell: nohup /usr/local/latest/bin/startup.sh &
